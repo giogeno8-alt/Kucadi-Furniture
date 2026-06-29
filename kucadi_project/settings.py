@@ -20,11 +20,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u0bwcarc=7ncj=5@5*4so#&%i&7n7_nf4@49wdard2e+8xxe83')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DIUBAH: Otomatis False kalau sudah di Render (Production), tetap True kalau di laptop kamu
+# Development: True  |  Production (Render): False
 DEBUG = 'RENDER' not in os.environ
 
 # DIUBAH: Menambahkan domain Render secara dinamis agar tidak error saat online
-ALLOWED_HOSTS = ['happy-caution-slaw.ngrok-free.dev', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['happy-caution-slaw.ngrok-free.dev', '127.0.0.1', 'localhost', 'KucadiFurnitures.pythonanywhere.com', 'kucadifurnitures.pythonanywhere.com']
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
@@ -164,9 +164,8 @@ LOGIN_URL = '/accounts/login/'
 # Konfigurasi agar alur login Google berjalan mulus tanpa hambatan
 ACCOUNT_LOGOUT_ON_GET = True
 SOCIALACCOUNT_LOGIN_ON_GET = True
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
+ACCOUNT_LOGIN_METHODS = {'username', 'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 
 # =========================================================================
 # EMAIL CONFIGURATION - DEVELOPMENT (Console Backend)
