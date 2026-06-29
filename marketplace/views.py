@@ -458,11 +458,33 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
         gross_amount = int((Decimal(total_amount) + Decimal(shipping_cost)).quantize(Decimal('1')))
         print(f'[MIDTRANS DEBUG] order_id={order_id_midtrans}, gross_amount={gross_amount}')
 
+        # Build item_details from order items
+        item_details = []
+        for oi in order.items.select_related('product').all():
+            item_details.append({
+                'id': str(oi.product.id),
+                'price': int(oi.price_per_unit),
+                'quantity': oi.quantity,
+                'name': oi.product.name[:50],
+                'category': oi.product.category.name[:20] if oi.product.category else 'Furniture',
+            })
+        # Tambah ongkos kirim sebagai item terpisah
+        if shipping_cost > 0:
+            item_details.append({
+                'id': 'SHIPPING',
+                'price': int(shipping_cost),
+                'quantity': 1,
+                'name': f'Ongkos Kirim ({courier})',
+            })
+
+        order_detail_url = request.build_absolute_uri(reverse('order_detail', kwargs={'order_id': order.id})) if request else f'http://127.0.0.1:8000/order/{order.id}/'
+
         payload = {
             'transaction_details': {
                 'order_id': order_id_midtrans,
                 'gross_amount': gross_amount,
             },
+            'item_details': item_details,
             'customer_details': {
                 'first_name': shipping_name,
                 'phone': phone,
@@ -483,10 +505,13 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
                     'country_code': 'IDN',
                 }
             },
+            'credit_card': {
+                'secure': False,
+            },
             'callbacks': {
-                'finish': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
-                'error': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
-                'pending': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/'
+                'finish': order_detail_url,
+                'error': order_detail_url,
+                'pending': order_detail_url,
             },
             'custom_expiry': {
                 'expiry_duration': 30,
@@ -504,7 +529,10 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
                 order.save(update_fields=['midtrans_token'])
                 print(f'[MIDTRANS DEBUG] snap_token diterima: {snap_token[:20]}...')
             else:
-                print(f'[MIDTRANS DEBUG] snap_token TIDAK ADA dalam response! Response keys: {list(response.keys()) if response else "None"}')
+                import json as _json
+                print(f'[MIDTRANS DEBUG] snap_token TIDAK ADA dalam response!')
+                print(f'[MIDTRANS DEBUG] Full response: {_json.dumps(response, indent=2) if response else "None"}')
+                print(f'[MIDTRANS DEBUG] HTTP status (from response dict): {response.get("status_code", "N/A") if response else "N/A"}')
 
             return {
                 'snap_token': snap_token,

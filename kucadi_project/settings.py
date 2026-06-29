@@ -204,3 +204,11 @@ MIDTRANS_MERCHANT_ID = os.environ.get('MIDTRANS_MERCHANT_ID', '')
 MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
 MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
 MIDTRANS_IS_PRODUCTION = os.environ.get('MIDTRANS_IS_PRODUCTION', 'False').lower() == 'true'
+
+# Debug: cek apakah Midtrans keys terbaca
+_has_midtrans = bool(MIDTRANS_SERVER_KEY) and bool(MIDTRANS_CLIENT_KEY) and bool(MIDTRANS_MERCHANT_ID)
+print(f'[SETTINGS] MIDTRANS_SERVER_KEY exists: {bool(MIDTRANS_SERVER_KEY)}')
+print(f'[SETTINGS] MIDTRANS_CLIENT_KEY exists: {bool(MIDTRANS_CLIENT_KEY)}')
+print(f'[SETTINGS] MIDTRANS_MERCHANT_ID exists: {bool(MIDTRANS_MERCHANT_ID)}')
+print(f'[SETTINGS] MIDTRANS_IS_PRODUCTION: {MIDTRANS_IS_PRODUCTION}')
+print(f'[SETTINGS] Midtrans config complete: {_has_midtrans}')
