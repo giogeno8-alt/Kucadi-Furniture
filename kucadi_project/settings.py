@@ -11,6 +11,15 @@ import dj_database_url # BARU: Ditambahkan untuk PostgreSQL Render
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file jika ada (untuk PythonAnywhere & development)
+try:
+    from dotenv import load_dotenv
+    dotenv_path = BASE_DIR / '.env'
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path)
+except ImportError:
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
