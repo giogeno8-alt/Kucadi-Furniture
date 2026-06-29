@@ -29,15 +29,21 @@ except ImportError:
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u0bwcarc=7ncj=5@5*4so#&%i&7n7_nf4@49wdard2e+8xxe83')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Development: True  |  Production (Render): False
-DEBUG = 'RENDER' not in os.environ
+DEBUG = os.environ.get('DEBUG', 'False' if 'RENDER' in os.environ else 'True') == 'True'
 
-# DIUBAH: Menambahkan domain Render secara dinamis agar tidak error saat online
-ALLOWED_HOSTS = ['happy-caution-slaw.ngrok-free.dev', '127.0.0.1', 'localhost', 'KucadiFurnitures.pythonanywhere.com', 'kucadifurnitures.pythonanywhere.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+env_allowed = os.environ.get('ALLOWED_HOSTS', '')
+if env_allowed:
+    ALLOWED_HOSTS.extend([h.strip() for h in env_allowed.split(',') if h.strip()])
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+CSRF_TRUSTED_ORIGINS = []
+env_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+if env_csrf:
+    CSRF_TRUSTED_ORIGINS.extend([h.strip() for h in env_csrf.split(',') if h.strip()])
 
 
 # Application definition
@@ -177,9 +183,15 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 
 # =========================================================================
-# EMAIL CONFIGURATION - DEVELOPMENT (Console Backend)
+# EMAIL CONFIGURATION
 # =========================================================================
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@kucadifurniture.com')
 
 # =========================================================================
 # ALLAUTH EMAIL & SIGNUP CONFIGURATION
