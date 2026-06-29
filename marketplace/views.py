@@ -480,9 +480,9 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
                 }
             },
             'callbacks': {
-                'finish': 'http://127.0.0.1:8000/cart/checkout/',
-                'error': 'http://127.0.0.1:8000/cart/checkout/',
-                'pending': 'http://127.0.0.1:8000/cart/checkout/'
+                'finish': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
+                'error': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
+                'pending': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/'
             },
             'custom_expiry': {
                 'expiry_duration': 30,
