@@ -65,7 +65,7 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     grand_total = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
-    midtrans_token = models.CharField(max_length=255, blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
     expired_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
 

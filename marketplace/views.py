@@ -1,14 +1,7 @@
 import uuid
 import json
-import time
-import base64
-import hashlib
-import urllib.request
-import urllib.error
 from decimal import Decimal
 from datetime import timedelta
-
-import midtransclient
 
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
@@ -422,101 +415,8 @@ def buy_now(request, product_id):
     return redirect('checkout')
 
 
-def _get_midtrans_client(request=None):
-    server_key = getattr(settings, 'MIDTRANS_SERVER_KEY', '')
-    is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
-
-    if not server_key:
-        if request:
-            messages.error(request, 'MIDTRANS_SERVER_KEY tidak ditemukan atau kosong. Periksa settings.py.')
-        print('Midtrans settings missing: MIDTRANS_SERVER_KEY kosong')
-        return None
-
-    try:
-        return midtransclient.Snap(
-            is_production=is_production,
-            server_key=server_key
-        )
-    except Exception as e:
-        if request:
-            messages.error(request, 'Gagal membuat Midtrans client. Periksa server key atau koneksi jaringan.')
-        print('Midtrans client init failed:', str(e))
-        return None
-
-
-def _create_midtrans_transaction(order, shipping_name, phone, address_full, city, province, district, postal_code, courier, total_amount, shipping_cost, grand_total, request=None):
-    client = _get_midtrans_client(request=request)
-    if not client:
-        return None
-
-    try:
-        order_id_midtrans = f"KUCADI-{order.id}-{int(time.time())}"
-        gross_amount = int((Decimal(total_amount) + Decimal(shipping_cost)).quantize(Decimal('1')))
-        print(f'INFO MIDTRANS: order_id={order_id_midtrans}, gross_amount={gross_amount}')
-
-        payload = {
-            'transaction_details': {
-                'order_id': order_id_midtrans,
-                'gross_amount': gross_amount,
-            },
-            'customer_details': {
-                'first_name': shipping_name,
-                'phone': phone,
-                'billing_address': {
-                    'first_name': shipping_name,
-                    'phone': phone,
-                    'address': address_full,
-                    'city': city,
-                    'postal_code': postal_code or '',
-                    'country_code': 'IDN',
-                },
-                'shipping_address': {
-                    'first_name': shipping_name,
-                    'phone': phone,
-                    'address': address_full,
-                    'city': city,
-                    'postal_code': postal_code or '',
-                    'country_code': 'IDN',
-                }
-            },
-            'callbacks': {
-                'finish': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
-                'error': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/',
-                'pending': request.build_absolute_uri('/cart/checkout/') if request else 'http://127.0.0.1:8000/cart/checkout/'
-            },
-            'custom_expiry': {
-                'expiry_duration': 30,
-                'unit': 'minute'
-            }
-        }
-
-        try:
-            response = client.create_transaction(payload)
-            snap_token = response.get('token') or response.get('snap_token')
-            if snap_token:
-                order.midtrans_token = snap_token
-                order.save(update_fields=['midtrans_token'])
-
-            return {
-                'snap_token': snap_token,
-                'redirect_url': response.get('redirect_url'),
-                'midtrans_order_id': order_id_midtrans,
-            }
-        except Exception as e:
-            print('=== ERROR MIDTRANS DETAIL ===', str(e))
-            print('ERROR MIDTRANS ASLI:', str(e))
-            if request:
-                messages.error(request, f'Gagal menghubungkan ke Midtrans: {str(e)}')
-            return None
-    except Exception as e:
-        print('❌ Midtrans transaction creation failed:', str(e))
-        if request:
-            messages.error(request, 'Terjadi kesalahan saat membuat transaksi Midtrans. Silakan coba lagi nanti.')
-        return None
-
-
 # =========================================================================
-# BARU: Fungsi untuk memproses penambahan produk ke keranjang belanja
+# Fungsi untuk memproses penambahan produk ke keranjang belanja
 # =========================================================================
 @login_required
 def add_to_cart(request, product_id):
@@ -824,37 +724,6 @@ def checkout(request):
             ]
             OrderItem.objects.bulk_create(order_items)
 
-            # Coba membuat transaksi Midtrans Snap jika konfigurasi tersedia
-            transaction_data = _create_midtrans_transaction(
-                order,
-                shipping_name,
-                nomor_telepon,
-                address_full,
-                actual_city_name,
-                actual_province,
-                district,
-                postal_code,
-                courier,
-                total_price,
-                shipping_cost,
-                grand_total,
-                request=request
-            )
-
-            if not transaction_data or not transaction_data.get('snap_token'):
-                # Rollback order and stock karena transaksi Midtrans gagal.
-                for item in order.items.select_related('product'):
-                    product = item.product
-                    product.stock = (product.stock or 0) + item.quantity
-                    product.save(update_fields=['stock'])
-                order.status = 'cancelled'
-                order.save(update_fields=['status'])
-
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Gagal membuat transaksi Midtrans. Pesanan dibatalkan, silakan coba kembali.'
-                }, status=500)
-
             if direct_checkout:
                 request.session.pop('buy_now_product_id', None)
                 request.session.pop('buy_now_quantity', None)
@@ -868,9 +737,6 @@ def checkout(request):
                 'redirect_url': order_detail_url,
                 'message': 'Pesanan berhasil dibuat!'
             }
-
-            response_payload['snap_token'] = transaction_data['snap_token']
-            response_payload['midtrans_redirect_url'] = order_detail_url
             return JsonResponse(response_payload, status=201)
 
         except Exception as e:
@@ -972,216 +838,24 @@ def checkout(request):
         'shipping_name': shipping_name,
         'nomor_telepon': nomor_telepon,
         'phone': nomor_telepon,
-        'midtrans_client_key': getattr(settings, 'MIDTRANS_CLIENT_KEY', ''),
-        'midtrans_is_production': getattr(settings, 'MIDTRANS_IS_PRODUCTION', False),
     }
     return render(request, 'marketplace/checkout.html', context)
 
-@csrf_exempt
-def midtrans_notification(request):
-    """Endpoint untuk menerima Notification/Webhook dari Midtrans Snap.
-
-    Midtrans mengirimkan payload JSON yang berisi `order_id` (format KUCADI-{db_order_id}-{timestamp})
-    dan `transaction_status`. Untuk status `expire` / `cancel`, rollback stok dan set status.
-    """
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-
-    try:
-        payload = json.loads(request.body.decode('utf-8'))
-    except Exception:
-        return HttpResponseBadRequest('invalid json')
-
-    order_id = payload.get('order_id') or payload.get('order_id_string')
-    transaction_status = payload.get('transaction_status') or payload.get('status') or ''
-
-    if not order_id:
-        return HttpResponseBadRequest('missing order_id')
-
-    try:
-        order = None
-        if isinstance(order_id, str) and order_id.startswith('KUCADI-'):
-            parts = order_id.split('-', 2)
-            if len(parts) >= 3:
-                try:
-                    db_order_id = int(parts[1])
-                    order = Order.objects.filter(id=db_order_id).first()
-                except (ValueError, TypeError):
-                    order = None
-
-        if not order:
-            order = Order.objects.filter(id=order_id).first() if isinstance(order_id, int) else Order.objects.filter(invoice_number=order_id).first()
-
-        if not order:
-            return HttpResponse(status=404)
-
-        signature_key = payload.get('signature_key')
-        status_code = str(payload.get('status_code', ''))
-        gross_amount = str(payload.get('gross_amount', ''))
-        server_key = getattr(settings, 'MIDTRANS_SERVER_KEY', '')
-
-        if not signature_key:
-            return JsonResponse({'status': 'error', 'message': 'Missing signature_key'}, status=400)
-        if not server_key:
-            return JsonResponse({'status': 'error', 'message': 'Missing server key'}, status=500)
-
-        expected_signature = hashlib.sha512(
-            f"{order_id}{status_code}{gross_amount}{server_key}".encode('utf-8')
-        ).hexdigest()
-        if expected_signature != signature_key:
-            return JsonResponse({'status': 'error', 'message': 'Invalid signature'}, status=400)
-
-        status_lower = str(transaction_status).lower()
-        if status_lower in ('settlement', 'capture'):
-            fraud_status = str(payload.get('fraud_status', '')).lower()
-            if status_lower != 'capture' or fraud_status == 'accept':
-                order.status = 'paid'
-                order.save(update_fields=['status'])
-                return JsonResponse({'status': 'ok', 'order_status': order.status})
-
-        if status_lower in ('expire', 'expired'):
-            if order.status != 'expired':
-                order.status = 'expired'
-                order.save(update_fields=['status'])
-        elif status_lower in ('cancel', 'deny', 'failure'):
-            if order.status not in ('cancelled',):
-                for item in order.items.select_related('product'):
-                    prod = item.product
-                    prod.stock = (prod.stock or 0) + item.quantity
-                    prod.save()
-                order.status = 'cancelled'
-                order.save(update_fields=['status'])
-
-        return JsonResponse({'status': 'ok', 'order_status': order.status})
-    except Exception as e:
-        import traceback
-        print('❌ Error processing Midtrans notification:', str(e))
-        print(traceback.format_exc())
-        return HttpResponse(status=500)
-
-
-@csrf_exempt
-def midtrans_webhook(request):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-
-    try:
-        data = json.loads(request.body)
-    except Exception:
-        return HttpResponseBadRequest('invalid json')
-
-    order_id = data.get('order_id')
-    transaction_status = data.get('transaction_status') or data.get('status')
-
-    if not order_id or not transaction_status:
-        return HttpResponseBadRequest('missing order_id or transaction_status')
-
-    try:
-        order = None
-        if isinstance(order_id, str) and order_id.startswith('KUCADI-'):
-            parts = order_id.split('-')
-            if len(parts) >= 2:
-                try:
-                    db_order_id = int(parts[1])
-                    order = Order.objects.filter(id=db_order_id).first()
-                except (ValueError, TypeError):
-                    order = None
-
-        if not order:
-            order = Order.objects.filter(invoice_number=order_id).first()
-
-        if not order:
-            return JsonResponse({'status': 'error', 'message': 'Order not found'}, status=404)
-
-        signature_key = data.get('signature_key')
-        status_code = str(data.get('status_code', ''))
-        gross_amount = str(data.get('gross_amount', ''))
-        server_key = getattr(settings, 'MIDTRANS_SERVER_KEY', '')
-
-        if not signature_key:
-            return JsonResponse({'status': 'error', 'message': 'Missing signature_key'}, status=400)
-        if not server_key:
-            return JsonResponse({'status': 'error', 'message': 'Missing server key'}, status=500)
-
-        expected_signature = hashlib.sha512(
-            f"{order_id}{status_code}{gross_amount}{server_key}".encode('utf-8')
-        ).hexdigest()
-        if expected_signature != signature_key:
-            return JsonResponse({'status': 'error', 'message': 'Invalid signature'}, status=400)
-
-        status_lower = str(transaction_status).lower()
-        if status_lower in ('settlement', 'capture'):
-            fraud_status = str(data.get('fraud_status', '')).lower()
-            if status_lower != 'capture' or fraud_status == 'accept':
-                order.status = 'paid'
-                order.save(update_fields=['status'])
-                return JsonResponse({'status': 'ok', 'order_status': order.status})
-
-        if status_lower in ('expire', 'expired'):
-            if order.status != 'expired':
-                order.status = 'expired'
-                order.save(update_fields=['status'])
-        elif status_lower in ('cancel', 'deny', 'failure'):
-            if order.status not in ('cancelled',):
-                for item in order.items.select_related('product'):
-                    prod = item.product
-                    prod.stock = (prod.stock or 0) + item.quantity
-                    prod.save()
-                order.status = 'cancelled'
-                order.save(update_fields=['status'])
-
-        return JsonResponse({'status': 'ok', 'order_status': order.status})
-
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
-
-@csrf_exempt
 @login_required
-def payment_success_callback(request, order_id):
+def dummy_payment_complete(request, order_id):
+    """Mengonfirmasi pembayaran dummy QRIS."""
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
 
-    try:
-        order = get_object_or_404(Order, id=order_id, user=request.user)
-        payload = json.loads(request.body.decode('utf-8') or '{}')
-        midtrans_order_id = payload.get('midtrans_order_id', '')
-        transaction_status = str(payload.get('transaction_status', '')).lower()
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    if order.status != 'pending':
+        return JsonResponse({'status': 'error', 'message': 'Pesanan tidak dalam status pending.'}, status=400)
 
-        if order.status == 'pending':
-            if midtrans_order_id:
-                try:
-                    server_key = getattr(settings, 'MIDTRANS_SERVER_KEY', '')
-                    is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
-                    api_url = (
-                        f"https://api.midtrans.com/v2/{midtrans_order_id}/status"
-                        if is_production else
-                        f"https://api.sandbox.midtrans.com/v2/{midtrans_order_id}/status"
-                    )
-                    auth = base64.b64encode(f"{server_key}:".encode('utf-8')).decode('utf-8')
-                    req = urllib.request.Request(api_url, headers={
-                        'Authorization': f'Basic {auth}',
-                        'Accept': 'application/json',
-                    })
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        response_data = json.loads(resp.read().decode('utf-8'))
-                        verified_status = str(response_data.get('transaction_status', '') or response_data.get('status', '')).lower()
+    order.status = 'paid'
+    order.paid_at = timezone.now()
+    order.save(update_fields=['status', 'paid_at'])
 
-                    if verified_status in ('capture', 'settlement') or transaction_status in ('capture', 'settlement'):
-                        order.status = 'paid'
-                        order.save(update_fields=['status'])
-                except Exception:
-                    order.status = 'paid'
-                    order.save(update_fields=['status'])
-            else:
-                order.status = 'paid'
-                order.save(update_fields=['status'])
-
-        return JsonResponse({'status': 'ok', 'order_status': order.status})
-    except Order.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Order not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return JsonResponse({'status': 'ok', 'order_status': order.status, 'redirect_url': reverse('order_history')})
 
     return JsonResponse({'status': 'error'}, status=405)
 
@@ -1315,35 +989,11 @@ def order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     items = order.items.select_related('product')
     total_items = sum(item.quantity for item in items)
-    # Jika pesanan masih pending dan belum memiliki midtrans_token, cobalah membuat transaksi Snap
-    if order.status == 'pending' and not order.midtrans_token:
-        try:
-            tx = _create_midtrans_transaction(
-                order,
-                order.shipping_name,
-                order.phone,
-                order.address_full,
-                order.city,
-                order.province,
-                order.district,
-                order.postal_code,
-                order.courier,
-                order.total_amount,
-                order.shipping_cost,
-                order.grand_total,
-            )
-            if tx and tx.get('snap_token'):
-                # order.midtrans_token sudah di-set oleh _create_midtrans_transaction
-                pass
-        except Exception as e:
-            print('❌ Gagal membuat Midtrans token di order_detail:', str(e))
 
     context = {
         'order': order,
         'items': items,
         'total_items': total_items,
-        'midtrans_client_key': getattr(settings, 'MIDTRANS_CLIENT_KEY', ''),
-        'midtrans_is_production': getattr(settings, 'MIDTRANS_IS_PRODUCTION', False),
     }
     return render(request, 'marketplace/order_detail.html', context)
 
