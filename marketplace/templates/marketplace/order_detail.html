@@ -81,7 +81,7 @@
                     {% if order.status == 'paid' or order.status == 'shipped' or order.status == 'completed' %}
                         <button onclick="window.print()" class="w-full bg-charcoal hover:bg-[#111111] text-white px-4 py-3 rounded-md font-semibold">Cetak Bukti Pembelian</button>
                     {% endif %}
-                    {% if order.status == 'pending' %}
+                    {% if order.status == 'pending' and midtrans_client_key %}
                         <button id="btn-bayar-sekarang" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-md font-semibold">Bayar Sekarang</button>
                     {% endif %}
                 </div>
@@ -105,127 +105,65 @@
 }
 </style>
 
-{% if order.status == 'pending' %}
-<!-- Modal QRIS Dummy Payment -->
-<div id="qris-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50">
-    <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
-        <div class="text-6xl mb-4">📱</div>
-        <h3 class="text-2xl font-bold text-charcoal mb-2">Scan QRIS untuk Bayar</h3>
-        <p class="text-sm text-gray-500 mb-6">Scan kode QR di bawah menggunakan aplikasi pembayaran (GoPay, OVO, DANA, Mobile Banking)</p>
-        <div class="bg-white border-2 border-dashed border-gray-300 rounded-2xl p-6 mb-6 inline-block">
-            <div class="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center mx-auto">
-                <div class="text-center">
-                    <div class="text-5xl mb-2">⬛</div>
-                    <div class="text-xs text-gray-400">QRIS Dummy</div>
-                </div>
-            </div>
-        </div>
-        <div class="text-sm text-gray-600 mb-6">
-            <p>Total Pembayaran: <span class="font-bold text-charcoal">Rp {{ order.grand_total|intcomma }}</span></p>
-        </div>
-        <button id="btn-sudah-bayar" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold transition mb-3">
-            Saya Sudah Membayar
-        </button>
-        <button id="btn-batal-modal" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-3 rounded-xl font-semibold transition">
-            Batal
-        </button>
-    </div>
-</div>
-
-<!-- Dialog Konfirmasi -->
-<div id="confirm-dialog" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50">
-    <div class="bg-white rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl text-center">
-        <div class="text-5xl mb-4">✅</div>
-        <h3 class="text-xl font-bold text-charcoal mb-2">Konfirmasi Pembayaran</h3>
-        <p class="text-sm text-gray-500 mb-6">Apakah Anda yakin sudah melakukan pembayaran? Tindakan ini tidak dapat dibatalkan.</p>
-        <div class="flex gap-3">
-            <button id="btn-konfirmasi-ya" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-semibold transition">Ya, Saya Yakin</button>
-            <button id="btn-konfirmasi-tidak" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-3 rounded-xl font-semibold transition">Tunda</button>
-        </div>
-    </div>
-</div>
-
+{% if order.status == 'pending' and midtrans_client_key %}
+{% if midtrans_is_production %}
+<script src="https://app.midtrans.com/snap/snap.js" data-client-key="{{ midtrans_client_key }}"></script>
+{% else %}
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ midtrans_client_key }}"></script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const payButton = document.getElementById('btn-bayar-sekarang');
-    const qrisModal = document.getElementById('qris-modal');
-    const confirmDialog = document.getElementById('confirm-dialog');
-    const btnSudahBayar = document.getElementById('btn-sudah-bayar');
-    const btnBatalModal = document.getElementById('btn-batal-modal');
-    const btnKonfirmasiYa = document.getElementById('btn-konfirmasi-ya');
-    const btnKonfirmasiTidak = document.getElementById('btn-konfirmasi-tidak');
-    const orderId = {{ order.id }};
+    if (!payButton) return;
 
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
+    payButton.addEventListener('click', function () {
+        if (!window.snap) {
+            alert('Midtrans Snap belum dimuat. Silakan muat ulang halaman.');
+            return;
         }
-        return cookieValue;
-    }
 
-    if (payButton) {
-        payButton.addEventListener('click', function () {
-            qrisModal.classList.remove('hidden');
-        });
-    }
+        const snapToken = '{{ order.midtrans_token|default:""|escapejs }}';
+        if (!snapToken) {
+            alert('Token pembayaran belum tersedia. Silakan kembali ke checkout untuk membuat ulang pesanan.');
+            return;
+        }
 
-    if (btnSudahBayar) {
-        btnSudahBayar.addEventListener('click', function () {
-            qrisModal.classList.add('hidden');
-            confirmDialog.classList.remove('hidden');
-        });
-    }
-
-    if (btnBatalModal) {
-        btnBatalModal.addEventListener('click', function () {
-            qrisModal.classList.add('hidden');
-        });
-    }
-
-    if (btnKonfirmasiTidak) {
-        btnKonfirmasiTidak.addEventListener('click', function () {
-            confirmDialog.classList.add('hidden');
-            qrisModal.classList.remove('hidden');
-        });
-    }
-
-    if (btnKonfirmasiYa) {
-        btnKonfirmasiYa.addEventListener('click', async function () {
-            btnKonfirmasiYa.disabled = true;
-            btnKonfirmasiYa.textContent = '⏳ Memproses...';
-
-            try {
-                const response = await fetch('/order/' + orderId + '/dummy-payment/', {
+        window.snap.pay(snapToken, {
+            onSuccess: function (result) {
+                const orderId = {{ order.id }};
+                const midtransOrderId = result.order_id || '';
+                fetch(`/order/${orderId}/payment-success/`, {
                     method: 'POST',
                     headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',
                     },
+                    body: JSON.stringify({
+                        midtrans_order_id: midtransOrderId,
+                        transaction_status: result.transaction_status || 'settlement',
+                    })
+                })
+                .then(resp => resp.json())
+                .then(data => {
+                    window.location.href = '/order/history/';
+                })
+                .catch(err => {
+                    window.location.href = '/order/history/';
                 });
-                const data = await response.json();
-
-                if (data.status === 'ok') {
-                    window.location.href = data.redirect_url || '/order/history/';
-                } else {
-                    alert('Gagal memproses pembayaran: ' + (data.message || 'Unknown error'));
-                    btnKonfirmasiYa.disabled = false;
-                    btnKonfirmasiYa.textContent = 'Ya, Saya Yakin';
-                }
-            } catch (error) {
-                alert('Terjadi kesalahan: ' + error.message);
-                btnKonfirmasiYa.disabled = false;
-                btnKonfirmasiYa.textContent = 'Ya, Saya Yakin';
+            },
+            onPending: function (result) {
+                console.log('Pembayaran tertunda', result);
+                window.location.reload();
+            },
+            onError: function (result) {
+                console.error('Pembayaran gagal', result);
+                alert('Pembayaran gagal. Silakan coba lagi.');
+            },
+            onClose: function () {
+                console.warn('Snap popup ditutup');
             }
         });
-    }
+    });
 });
 </script>
 {% endif %}

@@ -20,6 +20,7 @@ urlpatterns = [
     path('wishlist/toggle/<int:product_id>/', views.toggle_wishlist, name='toggle_wishlist_id'),
     path('wishlist/toggle/', views.toggle_wishlist, name='toggle_wishlist'),
     path('wishlist/', views.wishlist_view, name='wishlist'),
+    # Midtrans webhook endpoints (handled in marketplace app)
     # Halaman Detail: Spesifikasi Fisik, Volume, Massa, & Tombol Aksi Produk
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
     path('product/<int:product_id>/buy-now/', views.buy_now, name='buy_now'),
@@ -33,7 +34,8 @@ urlpatterns = [
     path('order/<int:order_id>/', views.order_detail, name='order_detail'),
     path('order/history/', views.order_history, name='order_history'),
     path('order/<int:order_id>/confirm-received/', views.confirm_order_received, name='confirm_order_received'),
-    path('order/<int:order_id>/dummy-payment/', views.dummy_payment_complete, name='dummy_payment_complete'),
+    path('midtrans/notification/', views.midtrans_notification, name='midtrans_notification'),
+    path('order/<int:order_id>/payment-success/', views.payment_success_callback, name='payment_success_callback'),
     path('helpdesk/', views.helpdesk, name='helpdesk'),
     path('panduan-rakit/', views.panduan_rakit, name='panduan_rakit'),
 

@@ -30,11 +30,6 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://kucadifurnitures.pythonanywhere.com',
-    'https://KucadiFurnitures.pythonanywhere.com',
-]
-
 
 # Application definition
 
@@ -183,3 +178,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_SIGNUP_REDIRECT_URL = '/'
 
+# Midtrans configuration
+MIDTRANS_MERCHANT_ID = os.environ.get('MIDTRANS_MERCHANT_ID', '')
+MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
+MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
+MIDTRANS_IS_PRODUCTION = os.environ.get('MIDTRANS_IS_PRODUCTION', 'False').lower() == 'true'
