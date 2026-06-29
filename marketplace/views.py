@@ -3,6 +3,7 @@ import json
 import time
 import base64
 import hashlib
+import traceback
 import urllib.request
 import urllib.error
 from decimal import Decimal
@@ -426,10 +427,12 @@ def _get_midtrans_client(request=None):
     server_key = getattr(settings, 'MIDTRANS_SERVER_KEY', '')
     is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
 
+    print(f'[MIDTRANS DEBUG] SERVER_KEY ada: {bool(server_key)}, is_production: {is_production}')
+
     if not server_key:
         if request:
             messages.error(request, 'MIDTRANS_SERVER_KEY tidak ditemukan atau kosong. Periksa settings.py.')
-        print('Midtrans settings missing: MIDTRANS_SERVER_KEY kosong')
+        print('[MIDTRANS DEBUG] Midtrans settings missing: MIDTRANS_SERVER_KEY kosong')
         return None
 
     try:
@@ -440,7 +443,8 @@ def _get_midtrans_client(request=None):
     except Exception as e:
         if request:
             messages.error(request, 'Gagal membuat Midtrans client. Periksa server key atau koneksi jaringan.')
-        print('Midtrans client init failed:', str(e))
+        print(f'[MIDTRANS DEBUG] Midtrans client init failed: {str(e)}')
+        print(f'[MIDTRANS DEBUG] Traceback:\n{traceback.format_exc()}')
         return None
 
 
@@ -452,7 +456,7 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
     try:
         order_id_midtrans = f"KUCADI-{order.id}-{int(time.time())}"
         gross_amount = int((Decimal(total_amount) + Decimal(shipping_cost)).quantize(Decimal('1')))
-        print(f'INFO MIDTRANS: order_id={order_id_midtrans}, gross_amount={gross_amount}')
+        print(f'[MIDTRANS DEBUG] order_id={order_id_midtrans}, gross_amount={gross_amount}')
 
         payload = {
             'transaction_details': {
@@ -491,11 +495,16 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
         }
 
         try:
+            print(f'[MIDTRANS DEBUG] Mengirim request ke Midtrans API...')
             response = client.create_transaction(payload)
+            print(f'[MIDTRANS DEBUG] Response dari Midtrans: {response}')
             snap_token = response.get('token') or response.get('snap_token')
             if snap_token:
                 order.midtrans_token = snap_token
                 order.save(update_fields=['midtrans_token'])
+                print(f'[MIDTRANS DEBUG] snap_token diterima: {snap_token[:20]}...')
+            else:
+                print(f'[MIDTRANS DEBUG] snap_token TIDAK ADA dalam response! Response keys: {list(response.keys()) if response else "None"}')
 
             return {
                 'snap_token': snap_token,
@@ -503,13 +512,16 @@ def _create_midtrans_transaction(order, shipping_name, phone, address_full, city
                 'midtrans_order_id': order_id_midtrans,
             }
         except Exception as e:
-            print('=== ERROR MIDTRANS DETAIL ===', str(e))
-            print('ERROR MIDTRANS ASLI:', str(e))
+            print(f'[MIDTRANS DEBUG] === ERROR MIDTRANS DETAIL ===')
+            print(f'[MIDTRANS DEBUG] Exception type: {type(e).__name__}')
+            print(f'[MIDTRANS DEBUG] Exception message: {str(e)}')
+            print(f'[MIDTRANS DEBUG] Full traceback:\n{traceback.format_exc()}')
             if request:
                 messages.error(request, f'Gagal menghubungkan ke Midtrans: {str(e)}')
             return None
     except Exception as e:
-        print('❌ Midtrans transaction creation failed:', str(e))
+        print(f'[MIDTRANS DEBUG] ❌ Midtrans payload building failed: {str(e)}')
+        print(f'[MIDTRANS DEBUG] Traceback:\n{traceback.format_exc()}')
         if request:
             messages.error(request, 'Terjadi kesalahan saat membuat transaksi Midtrans. Silakan coba lagi nanti.')
         return None
