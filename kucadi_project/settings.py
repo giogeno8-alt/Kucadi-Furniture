@@ -171,6 +171,18 @@ AUTHENTICATION_BACKENDS = [
 
 SITE_ID = 1
 
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https'
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+    },
+}
+
 # Arahkan redirect kembali ke halaman utama katalog setelah login/logout
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
