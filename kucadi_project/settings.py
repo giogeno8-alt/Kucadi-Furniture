@@ -40,7 +40,7 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-CSRF_TRUSTED_ORIGINS = []
+CSRF_TRUSTED_ORIGINS = ['https://*.pythonanywhere.com']
 env_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
 if env_csrf:
     CSRF_TRUSTED_ORIGINS.extend([h.strip() for h in env_csrf.split(',') if h.strip()])
